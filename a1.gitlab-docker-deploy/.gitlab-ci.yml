@@ -1,0 +1,104 @@
+# trigger_job:
+#   trigger:
+include: 
+  - local: 'child-pipeline.yml'
+  # needs: ['CI_Pre_Check']
+  # when: on_failure
+
+.job_docker_template: &template
+  tags:
+    - runner1
+  only:
+    - main
+  
+stages:
+    - pre-check
+    - build
+    - test
+    - deploy
+    - prod deploy
+
+default:
+  timeout: 1 hour
+
+CI_Pre_Check:
+    stage: pre-check
+    <<: *template
+    script:
+      - echo "pre check stage"
+      - docker version | grep Version
+      # - sleep 20
+      # - exit 1
+    allow_failure: true
+
+CI_Build:
+    stage: build
+    <<: *template
+    inherit:
+      default: false
+    before_script:
+      - echo "$Access_Token" | docker login registry.gitlab.com -u kumartim46 --password-stdin
+      - docker build -t registry.gitlab.com/self5801524/demo .
+      - docker push registry.gitlab.com/self5801524/demo
+    needs: []
+    script:
+        - echo "hello"
+    after_script:
+        - sudo docker images
+    retry: 2
+    artifacts:
+      name: Devops
+      paths:
+        - "$CI_PROJECT_DIR"
+      exclude: 
+        - .gitlab-ci.yml
+      when: on_failure
+      expire_in: "1 second"
+
+CI_Build_V2:
+    stage: build
+    <<: *template
+    before_script:
+      - sleep 10
+    needs: ['CI_Pre_Check']
+    script:
+      - docker build -t $Image_Name_V2:$CI_PIPELINE_IID .
+
+CI_test:
+    stage: test
+    <<: *template
+    script:
+        - echo "test stage"
+        - docker ps -a
+        - docker images
+    when: manual
+
+# pages:
+#   stage: deploy
+#   tags:
+#     - runner1
+#   script:
+#     - mkdir .public
+#     - cp -r * .public
+#     - mv .public public
+#   artifacts:
+#     paths:
+#       - public
+
+CI_Deploy_Testing:
+  stage: deploy
+  <<: *template
+  script:
+    - sudo docker rm -f $(docker ps -aq)
+    - sudo docker run -itd -p 80:80 httpd
+  environment:
+    name: testing
+
+CI_Prod_Deploy:
+  stage: prod deploy
+  <<: *template
+  script:
+    - sudo docker run -itd -p 8080:80 registry.gitlab.com/self5801524/demo
+  environment:
+    name: prod
+  when: manual

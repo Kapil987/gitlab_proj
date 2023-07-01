@@ -1,0 +1,13 @@
+stages:
+    - test
+
+CI_Cleanup:
+    stage: test
+    tags:
+      - runner1
+    only:
+        - main
+    script:
+        - sudo docker image prune -a -f
+        # - sudo docker rm -f $(sudo docker ps -a -q)
+    when: manual
